@@ -22,6 +22,12 @@ from core.feature_registry import (
     get_default_features,
 )
 
+from core.validation import (
+    sanitize_app_name,
+    sanitize_description,
+    validate_project_config,
+)
+
 
 # --------------------------------------------------
 # Stack normalization
@@ -86,6 +92,13 @@ def build_project_config(
     ready for script generation.
     """
 
+    # --------------------------------------------------
+    # Input validation & sanitization
+    # --------------------------------------------------
+
+    app_name = sanitize_app_name(app_name)
+    description = sanitize_description(description)
+
     stack = normalize_stack(stack_label)
 
     # --------------------------------------------------
@@ -107,9 +120,9 @@ def build_project_config(
     # --------------------------------------------------
 
     project_config: Dict = {
-        "app_name": app_name.strip(),
+        "app_name": app_name,
         "stack": stack,
-        "description": description.strip(),
+        "description": description,
         "features": features,
         "screens": screens,
         "dependencies": deps_info["dependencies"],
@@ -117,5 +130,14 @@ def build_project_config(
         "native": native_info,
         "automation_mode": automation_mode,
     }
+
+    # --------------------------------------------------
+    # Validate final config
+    # --------------------------------------------------
+
+    is_valid, errors = validate_project_config(project_config)
+
+    if not is_valid:
+        raise ValueError(f"Invalid project configuration: {', '.join(errors)}")
 
     return project_config

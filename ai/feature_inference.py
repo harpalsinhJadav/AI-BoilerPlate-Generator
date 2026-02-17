@@ -18,15 +18,8 @@ from core.feature_registry import (
     get_default_features,
 )
 
-# Optional LLM imports (safe if missing)
-try:
-    from langchain_google_genai import ChatGoogleGenerativeAI
-    from langchain.prompts import PromptTemplate
-    from langchain.chains import LLMChain
-
-    LLM_AVAILABLE = True
-except Exception:
-    LLM_AVAILABLE = False
+# Use centralized LLM provider
+from ai.llm_provider import run_llm, is_llm_available
 
 
 # --------------------------------------------------
@@ -60,12 +53,10 @@ def keyword_feature_detection(description: str, stack: str) -> List[str]:
 
 def llm_feature_detection(description: str, stack: str) -> List[str]:
     """
-    Uses Gemini via LangChain to infer features.
+    Uses LLM (via centralized provider) to infer features.
     Falls back automatically if key missing or error occurs.
     """
-    api_key = os.getenv("GOOGLE_API_KEY")
-
-    if not api_key or not LLM_AVAILABLE:
+    if not is_llm_available():
         raise RuntimeError("LLM not available")
 
     features = get_all_features()
@@ -74,10 +65,7 @@ def llm_feature_detection(description: str, stack: str) -> List[str]:
         f"- {f['id']}: {f['label']}" for f in features if stack in f["stacks"]
     )
 
-    prompt = PromptTemplate(
-        input_variables=["description", "feature_list"],
-        template="""
-You are a senior mobile architect.
+    prompt = f"""You are a senior mobile architect.
 
 From the app description below,
 select ONLY the relevant feature IDs from the provided list.
@@ -89,29 +77,15 @@ Rules:
 - Include navigation for multi-screen apps.
 
 Available Features:
-{feature_list}
+{feature_list_text}
 
 App Description:
 {description}
 
 Answer:
-""",
-    )
+"""
 
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-pro",
-        temperature=0,
-        google_api_key=api_key,
-    )
-
-    chain = LLMChain(llm=llm, prompt=prompt)
-
-    result = chain.run(
-        {
-            "description": description,
-            "feature_list": feature_list_text,
-        }
-    )
+    result = run_llm(prompt, provider="gemini", temperature=0)
 
     raw_ids = [x.strip() for x in result.split(",")]
 

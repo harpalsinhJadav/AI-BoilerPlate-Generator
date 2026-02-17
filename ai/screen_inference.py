@@ -13,15 +13,8 @@ Pipeline:
 from typing import List, Set
 import os
 
-# Optional LLM imports
-try:
-    from langchain_google_genai import ChatGoogleGenerativeAI
-    from langchain.prompts import PromptTemplate
-    from langchain.chains import LLMChain
-
-    LLM_AVAILABLE = True
-except Exception:
-    LLM_AVAILABLE = False
+# Use centralized LLM provider
+from ai.llm_provider import run_llm, is_llm_available
 
 
 # --------------------------------------------------
@@ -82,18 +75,13 @@ def keyword_screen_detection(description: str) -> List[str]:
 
 def llm_screen_detection(description: str) -> List[str]:
     """
-    Uses Gemini via LangChain to infer screens.
+    Uses LLM (via centralized provider) to infer screens.
     Raises error if unavailable → caller handles fallback.
     """
-    api_key = os.getenv("GOOGLE_API_KEY")
-
-    if not api_key or not LLM_AVAILABLE:
+    if not is_llm_available():
         raise RuntimeError("LLM not available")
 
-    prompt = PromptTemplate(
-        input_variables=["description"],
-        template="""
-You are a senior mobile UX architect.
+    prompt = f"""You are a senior mobile UX architect.
 
 From the app description below,
 list the REQUIRED mobile app screens.
@@ -109,18 +97,9 @@ App Description:
 {description}
 
 Answer:
-""",
-    )
+"""
 
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-pro",
-        temperature=0,
-        google_api_key=api_key,
-    )
-
-    chain = LLMChain(llm=llm, prompt=prompt)
-
-    result = chain.run({"description": description})
+    result = run_llm(prompt, provider="gemini", temperature=0)
 
     raw = [s.strip() for s in result.split(",") if s.strip()]
 
